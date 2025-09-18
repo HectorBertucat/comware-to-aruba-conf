@@ -16,6 +16,7 @@ class ComwareToArubaConverter {
         const downloadBtn = document.getElementById('download-btn');
         const copyBtn = document.getElementById('copy-btn');
         const exportExcelBtn = document.getElementById('export-excel-btn');
+        const syncBtn = document.getElementById('sync-btn');
         const stackCountInput = document.getElementById('stack-count');
 
         fileInput.addEventListener('change', this.handleFileLoad.bind(this));
@@ -23,7 +24,11 @@ class ComwareToArubaConverter {
         downloadBtn.addEventListener('click', this.handleDownload.bind(this));
         copyBtn.addEventListener('click', this.handleCopy.bind(this));
         exportExcelBtn.addEventListener('click', this.handleExportExcel.bind(this));
+        syncBtn.addEventListener('click', this.handleSync.bind(this));
         stackCountInput.addEventListener('change', this.handleStackCountChange.bind(this));
+
+        // Marquer comme non synchronisé
+        this.isManuallyEdited = false;
 
         // Tab navigation
         document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -46,6 +51,51 @@ class ComwareToArubaConverter {
             configOutput.addEventListener('scroll', () => {
                 lineNumbers.scrollTop = configOutput.scrollTop;
             });
+
+            // Détecter les modifications manuelles
+            configOutput.addEventListener('input', () => {
+                this.markAsManuallyEdited();
+                this.updateLineNumbers();
+            });
+        }
+    }
+
+    markAsManuallyEdited() {
+        this.isManuallyEdited = true;
+        const indicator = document.getElementById('sync-indicator');
+        const syncBtn = document.getElementById('sync-btn');
+
+        indicator.textContent = '⚠️ Modifié manuellement';
+        indicator.className = 'sync-indicator sync-warning';
+        syncBtn.style.display = 'inline-flex';
+    }
+
+    markAsSynced() {
+        this.isManuallyEdited = false;
+        const indicator = document.getElementById('sync-indicator');
+        const syncBtn = document.getElementById('sync-btn');
+
+        indicator.textContent = '📊 Synchronisé avec le tableau';
+        indicator.className = 'sync-indicator sync-ok';
+        syncBtn.style.display = 'none';
+    }
+
+    handleSync() {
+        if (this.parsedData) {
+            this.updateConfigPreview();
+            this.markAsSynced();
+            this.showMessage('Configuration resynchronisée avec le tableau', 'success');
+        }
+    }
+
+    updateLineNumbers() {
+        const configOutput = document.getElementById('aruba-config');
+        const lineNumbers = document.getElementById('line-numbers');
+
+        if (configOutput && lineNumbers) {
+            const lines = configOutput.value.split('\n');
+            const lineNumbersText = lines.map((_, index) => (index + 1).toString()).join('\n');
+            lineNumbers.textContent = lineNumbersText;
         }
     }
 
@@ -307,7 +357,55 @@ class ComwareToArubaConverter {
             }
         }
 
+        // Normaliser les données avec la répartition SFP optimale
+        this.normalizeInterfaceData(data);
+
         return data;
+    }
+
+    normalizeInterfaceData(data) {
+        // Obtenir la configuration de stack
+        const stackConfig = this.getStackConfiguration();
+
+        // Réinitialiser le mapping SFP
+        this.sfpMapping = new Map();
+
+        // Créer une nouvelle Map pour les interfaces physiques normalisées
+        const normalizedIntPhy = new Map();
+
+        // Trier les interfaces dans l'ordre naturel
+        const sortedInterfaces = Array.from(data.intPhy.entries()).sort((a, b) => {
+            return this.compareInterfaceNames(a[0], b[0]);
+        });
+
+        // Traiter chaque interface
+        for (const [interfaceName, intConfig] of sortedInterfaces) {
+            let finalInterfaceName = interfaceName;
+
+            // Si c'est un port SFP, appliquer le mapping optimisé
+            if (interfaceName.startsWith('Ten-GigabitEthernet')) {
+                const arubaInterface = this.mapInterfaceToArubaWithStack(interfaceName, stackConfig);
+                if (arubaInterface) {
+                    finalInterfaceName = this.convertArubaToComwareFormat(arubaInterface);
+                }
+            }
+
+            normalizedIntPhy.set(finalInterfaceName, intConfig);
+        }
+
+        // Remplacer les données d'origine
+        data.intPhy = normalizedIntPhy;
+    }
+
+    convertArubaToComwareFormat(arubaInterface) {
+        // Convertir format Aruba (1/1/49) vers format Comware (Ten-GigabitEthernet1/0/48)
+        const match = arubaInterface.match(/^(\d+)\/(\d+)\/(\d+)$/);
+        if (match) {
+            const [, module, slot, port] = match;
+            const newSlot = parseInt(slot) - 1; // 1 -> 0
+            return `Ten-GigabitEthernet${module}/${newSlot}/${port}`;
+        }
+        return arubaInterface;
     }
 
     parseInterfaceConfig(line, interfaceName, interfaceType, data) {
@@ -320,8 +418,8 @@ class ComwareToArubaConverter {
                 data.intPhy.get(interfaceName).adminStatus = 'Down';
             }
         }
-        else if (line.trim().startsWith('description ') && line.startsWith(' ')) {
-            // Only process descriptions that are properly indented (inside interface blocks)
+        else if (line.trim().startsWith('description ')) {
+            // Process descriptions inside interface blocks
             const description = line.trim().substring(12).replace(/['"]/g, '').trim();
             if (interfaceType === 'vlan' && data.intVlan.has(interfaceName)) {
                 data.intVlan.get(interfaceName).description = description;
@@ -637,10 +735,7 @@ class ComwareToArubaConverter {
         // Régénérer et afficher la configuration si les données existent
         if (this.parsedData) {
             const arubaConfig = this.generateArubaConfig(this.parsedData);
-            const configOutput = document.getElementById('aruba-config');
-            if (configOutput) {
-                configOutput.textContent = arubaConfig;
-            }
+            this.displayArubaConfig(arubaConfig);
         }
     }
 

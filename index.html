@@ -165,11 +165,15 @@
                     <button id="download-btn" class="btn btn-success">💾 Télécharger la configuration</button>
                     <button id="copy-btn" class="btn btn-secondary">📋 Copier dans le presse-papier</button>
                     <button id="export-excel-btn" class="btn btn-primary">📊 Exporter Excel modifié</button>
+                    <button id="sync-btn" class="btn btn-warning" style="display: none;">🔄 Resynchroniser avec le tableau</button>
+                </div>
+                <div class="config-status">
+                    <span id="sync-indicator" class="sync-indicator sync-ok">📊 Synchronisé avec le tableau</span>
                 </div>
                 <div class="config-container">
                     <div class="config-output-wrapper">
                         <div id="line-numbers" class="line-numbers"></div>
-                        <textarea id="aruba-config" class="config-output" readonly></textarea>
+                        <textarea id="aruba-config" class="config-output"></textarea>
                     </div>
                 </div>
             </section>
