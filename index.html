@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Convertisseur Comware vers Aruba</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔄 Convertisseur Comware vers Aruba</h1>
+            <p>Convertissez vos configurations de switch HP Comware (5130/5140) vers Aruba OS-CX (6100/6200)</p>
+        </header>
+
+        <main>
+            <!-- Étape 1: Chargement du fichier -->
+            <section id="file-section" class="card">
+                <h2>📁 1. Chargement de la configuration</h2>
+                <div class="file-input-container">
+                    <input type="file" id="config-file" accept=".txt" class="file-input">
+                    <label for="config-file" class="file-label">
+                        <span class="file-icon">📄</span>
+                        <span class="file-text">Sélectionner le fichier de configuration Comware (.txt)</span>
+                    </label>
+                </div>
+                <div id="file-info" class="file-info" style="display: none;">
+                    <span class="file-name"></span>
+                    <span class="file-size"></span>
+                </div>
+            </section>
+
+            <!-- Étape 2: Paramètres de conversion -->
+            <section id="params-section" class="card" style="display: none;">
+                <h2>⚙️ 2. Paramètres de conversion</h2>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="hostname">Nom du switch (hostname)</label>
+                        <input type="text" id="hostname" placeholder="ex: A-SR9-2-6100-48">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="switch-model">Modèle de switch cible</label>
+                        <select id="switch-model">
+                            <option value="6100-12">Aruba 6100 12 ports</option>
+                            <option value="6100-24">Aruba 6100 24 ports</option>
+                            <option value="6100-48" selected>Aruba 6100 48 ports</option>
+                            <option value="6200-48">Aruba 6200 48 ports</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="stack-count">Nombre de switches dans la stack</label>
+                        <input type="number" id="stack-count" value="1" min="1" max="8">
+                    </div>
+                </div>
+
+                    <div class="form-group">
+                        <label for="admin-password">Mot de passe admin</label>
+                        <input type="password" id="admin-password" placeholder="Mot de passe pour l'utilisateur admin">
+                    </div>
+
+                <!-- Configuration de stack détaillée -->
+                <div id="stack-config" class="stack-config" style="display: none;">
+                    <h3>Configuration détaillée de la stack</h3>
+                    <div id="stack-switches" class="stack-switches"></div>
+                </div>
+
+                <div class="convert-button-container">
+                    <button id="convert-btn" class="btn btn-primary">🚀 Convertir la configuration</button>
+                </div>
+            </section>
+
+            <!-- Étape 3: Visualisation Excel -->
+            <section id="excel-section" class="card" style="display: none;">
+                <h2>📊 3. Données extraites (format Excel intermédiaire)</h2>
+                <div class="tabs">
+                    <button class="tab-btn active" data-tab="int-vlan">Int-Vlan</button>
+                    <button class="tab-btn" data-tab="lag">LAG</button>
+                    <button class="tab-btn" data-tab="int">INT</button>
+                    <button class="tab-btn" data-tab="vlan">Vlan</button>
+                </div>
+
+                <div class="tab-content">
+                    <div id="tab-int-vlan" class="tab-pane active">
+                        <div class="table-container">
+                            <table id="table-int-vlan">
+                                <thead>
+                                    <tr>
+                                        <th>Interface</th>
+                                        <th>Admin Statut</th>
+                                        <th>IP</th>
+                                        <th>IP-sub</th>
+                                        <th>DHCP Relay</th>
+                                        <th>Description</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div id="tab-lag" class="tab-pane">
+                        <div class="table-container">
+                            <table id="table-lag">
+                                <thead>
+                                    <tr>
+                                        <th>Interface</th>
+                                        <th>Admin Statut</th>
+                                        <th>Type</th>
+                                        <th>Vlan</th>
+                                        <th>Description</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div id="tab-int" class="tab-pane">
+                        <div class="table-container">
+                            <table id="table-int">
+                                <thead>
+                                    <tr>
+                                        <th>Interface</th>
+                                        <th>Admin Statut</th>
+                                        <th>AGG</th>
+                                        <th>Type</th>
+                                        <th>Untag vlan</th>
+                                        <th>Tag vlan</th>
+                                        <th>Voice-VLAN</th>
+                                        <th>LLDP MED NP</th>
+                                        <th>Loopback VLANs</th>
+                                        <th>Description</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div id="tab-vlan" class="tab-pane">
+                        <div class="table-container">
+                            <table id="table-vlan">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Name</th>
+                                        <th>Nbr Ports</th>
+                                        <th>Snooping</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Étape 4: Configuration Aruba générée -->
+            <section id="result-section" class="card" style="display: none;">
+                <h2>✅ 4. Configuration Aruba générée</h2>
+                <div class="result-actions">
+                    <button id="download-btn" class="btn btn-success">💾 Télécharger la configuration</button>
+                    <button id="copy-btn" class="btn btn-secondary">📋 Copier dans le presse-papier</button>
+                    <button id="export-excel-btn" class="btn btn-primary">📊 Exporter Excel modifié</button>
+                </div>
+                <div class="config-container">
+                    <div class="config-output-wrapper">
+                        <div id="line-numbers" class="line-numbers"></div>
+                        <textarea id="aruba-config" class="config-output" readonly></textarea>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Messages de statut -->
+        <div id="status-messages" class="status-messages"></div>
+    </div>
+
+    <script src="converter.js"></script>
+</body>
+</html>
