@@ -20,12 +20,17 @@ class ComwareToArubaConverter {
         const stackCountInput = document.getElementById('stack-count');
 
         fileInput.addEventListener('change', this.handleFileLoad.bind(this));
-        convertBtn.addEventListener('click', this.handleConvert.bind(this));
+        // convertBtn.addEventListener('click', this.handleConvert.bind(this)); // Supprimé - conversion automatique
         downloadBtn.addEventListener('click', this.handleDownload.bind(this));
         copyBtn.addEventListener('click', this.handleCopy.bind(this));
         exportExcelBtn.addEventListener('click', this.handleExportExcel.bind(this));
         syncBtn.addEventListener('click', this.handleSync.bind(this));
         stackCountInput.addEventListener('change', this.handleStackCountChange.bind(this));
+
+        // Listeners pour conversion dynamique
+        document.getElementById('hostname').addEventListener('input', this.handleDynamicUpdate.bind(this));
+        document.getElementById('switch-model').addEventListener('change', this.handleDynamicUpdate.bind(this));
+        document.getElementById('admin-password').addEventListener('input', this.handleDynamicUpdate.bind(this));
 
         // Marquer comme non synchronisé
         this.isManuallyEdited = false;
@@ -40,6 +45,8 @@ class ComwareToArubaConverter {
 
         // Initialize synchronized scrolling for config display
         this.initializeConfigDisplay();
+
+        // Plus besoin de stepper - tout sur une page
     }
 
     initializeConfigDisplay() {
@@ -99,6 +106,8 @@ class ComwareToArubaConverter {
         }
     }
 
+    // Méthodes du stepper supprimées - tout affiché sur une page
+
     handleFileLoad(event) {
         const file = event.target.files[0];
         if (!file) return;
@@ -114,6 +123,11 @@ class ComwareToArubaConverter {
             if (hostname) {
                 document.getElementById('hostname').value = hostname;
             }
+
+            // Déclencher automatiquement la conversion
+            setTimeout(() => {
+                this.handleConvert();
+            }, 500);
         };
         reader.readAsText(file);
     }
@@ -155,6 +169,34 @@ class ComwareToArubaConverter {
 
     handleStackCountChange() {
         this.updateStackConfiguration();
+        // Régénérer si des données existent
+        this.handleDynamicUpdate();
+    }
+
+    handleDynamicUpdate() {
+        // Ne faire la conversion que si on a des données
+        if (this.configData && this.parsedData) {
+            // Débounce pour éviter trop d'appels
+            clearTimeout(this.updateTimeout);
+            this.updateTimeout = setTimeout(() => {
+                this.regenerateVisualizationAndConfig();
+            }, 300);
+        }
+    }
+
+    regenerateVisualizationAndConfig() {
+        try {
+            // Régénérer la visualisation
+            if (this.parsedData) {
+                this.generateStackVisualization(this.parsedData);
+                this.displayExcelData(this.parsedData);
+
+                const arubaConfig = this.generateArubaConfig(this.parsedData);
+                this.displayArubaConfig(arubaConfig);
+            }
+        } catch (error) {
+            console.error('Erreur lors de la régénération:', error);
+        }
     }
 
     updateStackConfiguration() {
@@ -172,10 +214,9 @@ class ComwareToArubaConverter {
                 switchDiv.innerHTML = `
                     <div class="stack-switch-label">Switch ${i}:</div>
                     <select id="switch-${i}-model" class="switch-model-select">
-                        <option value="6100-12">Aruba 6100 12 ports</option>
-                        <option value="6100-24">Aruba 6100 24 ports</option>
-                        <option value="6100-48" ${i === 1 ? 'selected' : ''}>Aruba 6100 48 ports</option>
-                        <option value="6200-48">Aruba 6200 48 ports</option>
+                        <option value="12">12 ports</option>
+                        <option value="24">24 ports</option>
+                        <option value="48" ${i === 1 ? 'selected' : ''}>48 ports</option>
                     </select>
                     <div class="stack-switch-info" id="switch-${i}-info">
                         48 ports + 4 SFP (49-52)
@@ -204,13 +245,17 @@ class ComwareToArubaConverter {
     }
 
     getSwitchModelInfo(model) {
+        // Convertir l'ancien format vers le nouveau si nécessaire
+        if (model.includes('-')) {
+            model = model.split('-')[1]; // 6100-48 -> 48
+        }
+
         const modelMap = {
-            '6100-12': { totalPorts: 12, sfpCount: 4, sfpStart: 13 },
-            '6100-24': { totalPorts: 24, sfpCount: 4, sfpStart: 25 },
-            '6100-48': { totalPorts: 48, sfpCount: 4, sfpStart: 49 },
-            '6200-48': { totalPorts: 48, sfpCount: 4, sfpStart: 49 }
+            '12': { totalPorts: 12, sfpCount: 4, sfpStart: 13, ports: 12 },
+            '24': { totalPorts: 24, sfpCount: 4, sfpStart: 25, ports: 24 },
+            '48': { totalPorts: 48, sfpCount: 4, sfpStart: 49, ports: 48 }
         };
-        return modelMap[model] || modelMap['6100-48'];
+        return modelMap[model] || modelMap['48'];
     }
 
     getStackConfiguration() {
@@ -227,7 +272,7 @@ class ComwareToArubaConverter {
         } else {
             for (let i = 1; i <= stackCount; i++) {
                 const modelSelect = document.getElementById(`switch-${i}-model`);
-                const model = modelSelect ? modelSelect.value : '6100-48';
+                const model = modelSelect ? modelSelect.value : '48';
                 stackConfig.push({
                     switchNumber: i,
                     model: model,
@@ -245,8 +290,7 @@ class ComwareToArubaConverter {
             return;
         }
 
-        const convertBtn = document.getElementById('convert-btn');
-        convertBtn.classList.add('loading');
+        console.log('Début de la conversion automatique...');
 
         try {
             this.showMessage('Analyse de la configuration en cours...', 'info');
@@ -257,22 +301,275 @@ class ComwareToArubaConverter {
             // Étape 1: Parser la configuration Comware
             this.parsedData = this.parseComwareConfig(this.configData);
 
-            // Étape 2: Afficher les données Excel
-            this.displayExcelData(this.parsedData);
+            // Afficher toutes les sections
+            this.showSection('visualization-section');
             this.showSection('excel-section');
+            this.showSection('result-section');
 
-            // Étape 3: Générer la configuration Aruba
+            // Générer la visualisation de la stack
+            this.generateStackVisualization(this.parsedData);
+
+            // Afficher les données Excel
+            this.displayExcelData(this.parsedData);
+
+            // Générer la configuration Aruba
             const arubaConfig = this.generateArubaConfig(this.parsedData);
             this.displayArubaConfig(arubaConfig);
-            this.showSection('result-section');
 
             this.showMessage('Conversion terminée avec succès !', 'success');
         } catch (error) {
             console.error('Erreur lors de la conversion:', error);
             this.showMessage('Erreur lors de la conversion: ' + error.message, 'error');
-        } finally {
-            convertBtn.classList.remove('loading');
         }
+    }
+
+    generateStackVisualization(data) {
+        const stackDisplay = document.getElementById('stack-display');
+        if (!stackDisplay) return;
+
+        console.log('Données pour visualisation:', data);
+
+        // Obtenir la configuration de la stack
+        const stackConfig = this.getStackConfiguration();
+
+        // Vider le contenu précédent
+        stackDisplay.innerHTML = '';
+
+        // Créer le conteneur de la stack
+        const stackContainer = document.createElement('div');
+        stackContainer.className = 'stack-container';
+
+        // Générer chaque switch de la stack
+        stackConfig.forEach((switchInfo, index) => {
+            const switchElement = this.createSwitchVisualization(switchInfo, index + 1, data);
+            stackContainer.appendChild(switchElement);
+        });
+
+        stackDisplay.appendChild(stackContainer);
+    }
+
+    createSwitchVisualization(switchInfo, stackNumber, data) {
+        const switchElement = document.createElement('div');
+        switchElement.className = `switch-visual switch-${switchInfo.ports}ports`;
+
+        // Header du switch
+        const switchHeader = document.createElement('div');
+        switchHeader.className = 'switch-header';
+        switchHeader.innerHTML = `
+            <div class="switch-title">Switch ${stackNumber}</div>
+            <div class="switch-model">${switchInfo.ports} ports</div>
+        `;
+        switchElement.appendChild(switchHeader);
+
+        // Conteneur des ports
+        const portsContainer = document.createElement('div');
+        portsContainer.className = 'ports-container';
+
+        // Ports RJ45 (disposés en 2 rangées)
+        const rj45Container = document.createElement('div');
+        rj45Container.className = 'rj45-container';
+
+        const portsPerRow = switchInfo.ports / 2;
+
+        // Rangée du haut (ports impairs: 1, 3, 5, 7, ...)
+        const topRow = document.createElement('div');
+        topRow.className = 'port-row port-row-top';
+        for (let i = 1; i <= switchInfo.ports; i += 2) {
+            const portElement = this.createPortElement(stackNumber, i, data);
+            topRow.appendChild(portElement);
+        }
+
+        // Rangée du bas (ports pairs: 2, 4, 6, 8, ...)
+        const bottomRow = document.createElement('div');
+        bottomRow.className = 'port-row port-row-bottom';
+        for (let i = 2; i <= switchInfo.ports; i += 2) {
+            const portElement = this.createPortElement(stackNumber, i, data);
+            bottomRow.appendChild(portElement);
+        }
+
+        rj45Container.appendChild(topRow);
+        rj45Container.appendChild(bottomRow);
+        portsContainer.appendChild(rj45Container);
+
+        // Ports SFP+ (4 ports)
+        const sfpContainer = document.createElement('div');
+        sfpContainer.className = 'sfp-container';
+        const sfpLabel = document.createElement('div');
+        sfpLabel.className = 'sfp-label';
+        sfpLabel.textContent = 'SFP+';
+        sfpContainer.appendChild(sfpLabel);
+
+        const sfpRow = document.createElement('div');
+        sfpRow.className = 'port-row sfp-row';
+        for (let i = switchInfo.ports + 1; i <= switchInfo.ports + 4; i++) {
+            const portElement = this.createPortElement(stackNumber, i, data);
+            portElement.classList.add('port-sfp');
+            sfpRow.appendChild(portElement);
+        }
+        sfpContainer.appendChild(sfpRow);
+        portsContainer.appendChild(sfpContainer);
+
+        switchElement.appendChild(portsContainer);
+        return switchElement;
+    }
+
+    createPortElement(stackNumber, portNumber, data) {
+        const portElement = document.createElement('div');
+        portElement.className = 'port';
+        portElement.dataset.stack = stackNumber;
+        portElement.dataset.port = portNumber;
+
+        // Chercher la configuration de ce port dans les données
+        const portConfig = this.findPortConfiguration(stackNumber, portNumber, data);
+
+        if (portConfig) {
+            portElement.classList.add(`port-${portConfig.type}`);
+            portElement.title = this.generatePortTooltip(portConfig);
+        } else {
+            portElement.classList.add('port-unused');
+            portElement.title = `Port ${stackNumber}/${portNumber} - Non configuré`;
+        }
+
+        // Numéro du port
+        const portLabel = document.createElement('span');
+        portLabel.className = 'port-label';
+        portLabel.textContent = portNumber;
+        portElement.appendChild(portLabel);
+
+        // Ajouter les event listeners pour les interactions
+        this.addPortInteractions(portElement, portConfig);
+
+        return portElement;
+    }
+
+    findPortConfiguration(stackNumber, portNumber, data) {
+        // Vérifier dans intPhy (interfaces physiques) - données du tableau
+        if (data.intPhy && data.intPhy.size > 0) {
+            for (const [interfaceKey, intf] of data.intPhy) {
+                // Extraire le numéro de port depuis le nom de l'interface
+                let portMatch = null;
+                if (interfaceKey.includes('GigabitEthernet')) {
+                    portMatch = interfaceKey.match(/GigabitEthernet(\d+)\/(\d+)\/(\d+)/);
+                } else if (interfaceKey.includes('Ten-GigabitEthernet')) {
+                    portMatch = interfaceKey.match(/Ten-GigabitEthernet(\d+)\/(\d+)\/(\d+)/);
+                }
+
+                if (portMatch) {
+                    const [, sourceStack, sourceSlot, sourcePort] = portMatch;
+                    // Comparer avec le port demandé
+                    if (parseInt(sourceStack) === stackNumber && parseInt(sourcePort) === portNumber) {
+                        // Déterminer le type basé sur les données du tableau
+                        const portType = this.determinePortTypeFromTable(intf);
+
+                        return {
+                            interface: interfaceKey,
+                            type: portType,
+                            status: intf.adminStatus || 'unknown',
+                            vlan: intf.untagVlan || intf.tagVlan || '-',
+                            description: intf.description || '',
+                            lag: intf.agg || '-',
+                            voiceVlan: intf.voiceVlan || '-'
+                        };
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    determinePortType(intf) {
+        if (intf.agg && intf.agg !== '-') return 'lag';
+        if (intf.type === 'trunk') return 'trunk';
+        if (intf.type === 'access') return 'access';
+        if (intf.type === 'hybrid') return 'hybrid';
+        return 'unused';
+    }
+
+    determinePortTypeFromTable(intf) {
+        // Vérifier le statut d'abord
+        const adminStatus = intf.adminStatus || '';
+
+        // Port DOWN
+        if (adminStatus.toLowerCase().includes('down')) {
+            return 'down';
+        }
+
+        // Port avec LAG
+        if (intf.agg && intf.agg !== '-') {
+            return 'lag';
+        }
+
+        // Port TRUNK
+        if (intf.type === 'TRUNK' || intf.type === 'trunk') {
+            return 'trunk';
+        }
+
+        // Port ACCESS
+        if (intf.type === 'ACCESS' || intf.type === 'access') {
+            return 'access';
+        }
+
+        // Port HYBRID
+        if (intf.type === 'HYBRID' || intf.type === 'hybrid') {
+            // Séparer HYBRID avec Voice-VLAN des autres
+            if (intf.voiceVlan && intf.voiceVlan !== '-') {
+                return 'hybrid-voice';
+            }
+            return 'hybrid';
+        }
+
+        // Port UP mais vide (pas de configuration spécifique)
+        if (adminStatus.toLowerCase().includes('up') || adminStatus === '') {
+            // Si aucun type défini mais interface UP, considérer comme vide
+            if (!intf.type || intf.type === '-') {
+                return 'empty';
+            }
+        }
+
+        // Par défaut : non utilisé
+        return 'unused';
+    }
+
+    generatePortTooltip(portConfig) {
+        if (!portConfig) return 'Port non configuré';
+
+        let tooltip = `Interface: ${portConfig.interface}\n`;
+        tooltip += `Type: ${portConfig.type.toUpperCase()}\n`;
+        tooltip += `Statut: ${portConfig.status}\n`;
+
+        if (portConfig.vlan && portConfig.vlan !== '-') {
+            tooltip += `VLAN: ${portConfig.vlan}\n`;
+        }
+
+        if (portConfig.lag && portConfig.lag !== '-') {
+            tooltip += `LAG: ${portConfig.lag}\n`;
+        }
+
+        if (portConfig.description) {
+            tooltip += `Description: ${portConfig.description}`;
+        }
+
+        return tooltip;
+    }
+
+    addPortInteractions(portElement, portConfig) {
+        // Hover effect
+        portElement.addEventListener('mouseenter', (e) => {
+            e.target.style.transform = 'scale(1.1)';
+            e.target.style.zIndex = '10';
+        });
+
+        portElement.addEventListener('mouseleave', (e) => {
+            e.target.style.transform = 'scale(1)';
+            e.target.style.zIndex = '1';
+        });
+
+        // Click pour plus de détails (future fonctionnalité)
+        portElement.addEventListener('click', (e) => {
+            console.log('Port clicked:', portConfig);
+            // TODO: Ouvrir un panel latéral avec les détails du port
+        });
     }
 
     parseComwareConfig(configText) {
@@ -582,6 +879,7 @@ class ComwareToArubaConverter {
     }
 
     displayExcelData(data) {
+
         this.populateTable('table-int-vlan', data.intVlan, [
             'adminStatus', 'ip', 'ipSub', 'dhcpRelay', 'description'
         ]);

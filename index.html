@@ -8,16 +8,20 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>🔄 Convertisseur Comware vers Aruba</h1>
-            <p>Convertissez vos configurations de switch HP Comware (5130/5140) vers Aruba OS-CX (6100/6200)</p>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="header-content">
+                <h1>🏗️ Visualisateur d'Architecture Réseau</h1>
+                <p>Convertissez et visualisez vos configurations Comware vers Aruba avec un schéma interactif</p>
+            </div>
         </header>
 
-        <main>
-            <!-- Étape 1: Chargement du fichier -->
+        <!-- Navigation supprimée - tout sur une page -->
+
+        <main class="app-main">
+            <!-- Configuration et import -->
             <section id="file-section" class="card">
-                <h2>📁 1. Chargement de la configuration</h2>
+                <h2>📁 Chargement de la configuration</h2>
                 <div class="file-input-container">
                     <input type="file" id="config-file" accept=".txt" class="file-input">
                     <label for="config-file" class="file-label">
@@ -31,9 +35,9 @@
                 </div>
             </section>
 
-            <!-- Étape 2: Paramètres de conversion -->
+            <!-- Paramètres de conversion -->
             <section id="params-section" class="card" style="display: none;">
-                <h2>⚙️ 2. Paramètres de conversion</h2>
+                <h2>⚙️ Paramètres de conversion</h2>
                 <div class="form-grid">
                     <div class="form-group">
                         <label for="hostname">Nom du switch (hostname)</label>
@@ -41,12 +45,11 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="switch-model">Modèle de switch cible</label>
+                        <label for="switch-model">Nombre de ports Aruba</label>
                         <select id="switch-model">
-                            <option value="6100-12">Aruba 6100 12 ports</option>
-                            <option value="6100-24">Aruba 6100 24 ports</option>
-                            <option value="6100-48" selected>Aruba 6100 48 ports</option>
-                            <option value="6200-48">Aruba 6200 48 ports</option>
+                            <option value="12">12 ports</option>
+                            <option value="24">24 ports</option>
+                            <option value="48" selected>48 ports</option>
                         </select>
                     </div>
 
@@ -67,14 +70,61 @@
                     <div id="stack-switches" class="stack-switches"></div>
                 </div>
 
-                <div class="convert-button-container">
-                    <button id="convert-btn" class="btn btn-primary">🚀 Convertir la configuration</button>
+                <div class="auto-conversion-info">
+                    <p class="text-info">✨ La conversion et la visualisation se mettent à jour automatiquement</p>
                 </div>
             </section>
 
-            <!-- Étape 3: Visualisation Excel -->
-            <section id="excel-section" class="card" style="display: none;">
-                <h2>📊 3. Données extraites (format Excel intermédiaire)</h2>
+            <!-- Visualisation de la stack -->
+            <section id="visualization-section" class="visualization-container" style="display: none;">
+                <h2>🏗️ Visualisation de la stack</h2>
+                <div class="stack-overview">
+                    <div class="stack-legend">
+                        <h3>Légende</h3>
+                        <div class="legend-items">
+                            <div class="legend-item">
+                                <div class="legend-color trunk"></div>
+                                <span>TRUNK</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color access"></div>
+                                <span>ACCESS</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color hybrid"></div>
+                                <span>HYBRID</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color hybrid-voice"></div>
+                                <span>HYBRID + Voice</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color lag"></div>
+                                <span>LAG</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color empty"></div>
+                                <span>UP vide</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color down"></div>
+                                <span>DOWN</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color unused"></div>
+                                <span>Non utilisé</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="stack-visualization" id="stack-display">
+                        <!-- Visualisation générée dynamiquement -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Données extraites -->
+            <section id="excel-section" class="data-section" style="display: none;">
+                <h2>📊 Données extraites</h2>
                 <div class="tabs">
                     <button class="tab-btn active" data-tab="int-vlan">Int-Vlan</button>
                     <button class="tab-btn" data-tab="lag">LAG</button>
@@ -158,9 +208,9 @@
                 </div>
             </section>
 
-            <!-- Étape 4: Configuration Aruba générée -->
-            <section id="result-section" class="card" style="display: none;">
-                <h2>✅ 4. Configuration Aruba générée</h2>
+            <!-- Configuration Aruba générée -->
+            <section id="result-section" class="config-section" style="display: none;">
+                <h2>⚙️ Configuration Aruba générée</h2>
                 <div class="result-actions">
                     <button id="download-btn" class="btn btn-success">💾 Télécharger la configuration</button>
                     <button id="copy-btn" class="btn btn-secondary">📋 Copier dans le presse-papier</button>
